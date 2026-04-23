@@ -1,0 +1,95 @@
+#########################################
+# drum rotating
+#########################################
+
+include         data/parameter_global.txt
+
+include         data/function_contact_models.txt
+
+coarsegraining ${cgf} model_check warn
+
+
+atom_style      granular
+atom_modify     map array
+communicate     single vel yes
+
+boundary        f f f
+newton          off
+units           si
+processors      2 4 1
+
+#read particle states from previously created restart file
+read_restart 	post/restart/init.liggghts.restart
+reset_timestep  0
+
+#building of pairwise neighbor lists
+neighbor	${skin} bin
+neigh_modify	delay 0
+
+
+#material parameteres
+include         data/function_set_parameter.txt
+
+#pair style
+pair_style gran model ${normal_model} ${tangential_model} ${cohesion_model} ${rolling_model} ${normal_model_option}
+pair_coeff	* *
+#
+print 'timestep:'
+print ${dt}
+
+#timestep, gravity
+timestep    ${dt}
+fix         gravi all gravity 9.81 vector 0.0 0.0 -1.0
+
+
+#import mesh from cad
+fix	cad1 all mesh/surface file meshes/shell.stl type 2 scale 0.001	
+fix	cad2 all mesh/surface file meshes/cov1.stl type 3 scale 0.001
+fix	cad3 all mesh/surface file meshes/cov2.stl type 3 scale 0.001
+
+#add walls to cad
+fix 	meshwalls all wall/gran model ${normal_model} ${tangential_model} ${cohesion_model} ${rolling_model}  mesh n_meshes 3 meshes cad1 cad2 cad3 ${normal_model_option}
+
+
+#perform constant NVE integration to update position, velocity, and angular velocity
+fix		integr all nve/sphere
+
+compute cnum all contact/atom
+
+#periodically check if the tipestep is larger thant 20% of Rayleigh and Hertz time
+fix ts_check all check/timestep/gran ${N_resume} 0.2 0.2
+
+# --- ROI definition ---
+variable roi_R equal 0.25*${drum_D}
+variable zmin equal -0.5*${drum_t}
+variable zmax equal  0.5*${drum_t}
+
+region ROI cylinder y 0.0 0.0 ${roi_R} ${zmin} ${zmax} units box
+group roi_group dynamic all region ROI every 1
+
+
+#screen output
+thermo_style	custom step atoms ke vol time cpu cpuremain
+thermo		${N_resume}
+thermo_modify	lost ignore norm no
+compute_modify	thermo_temp dynamic yes
+
+#file output
+dump    dmp2 all custom/vtk ${N_resume} post/rotating-*.liggghts.vtk id type x y z vx vy vz fx fy fz radius c_cnum
+dump_modify dmp2 pad 10
+
+dump 	dumpstl all mesh/stl ${N_resume} post/rotating-*.stl
+dump_modify dumpstl pad 10
+
+dump d_contact all custom ${N_resume} post/contact.dump id c_cnum
+
+
+#moving mesh
+fix move1 all move/mesh mesh cad1 rotate origin 0. 0. 0. axis  0. 1. 0. period ${periodOfRot}
+fix move2 all move/mesh mesh cad2 rotate origin 0. 0. 0. axis  0. 1. 0. period ${periodOfRot}
+fix move3 all move/mesh mesh cad3 rotate origin 0. 0. 0. axis  0. 1. 0. period ${periodOfRot}
+
+fix tracer all property/atom/tracer region_mark ROI mark_step 0 marker_style dirac check_mark_every 1
+dump d_tracer all custom ${N_resume} post/tracer.dump id type x y z f_tracer
+
+run ${N_resume_steps}

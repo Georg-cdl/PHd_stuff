@@ -1,0 +1,83 @@
+###Simulation parameters###
+
+#coarse-graning factor needs to be adjusted to achieve the desired particle size
+variable cgf equal 300.0
+
+
+
+variable dt equal 1.0416666666666666e-05
+
+variable drum_D equal 0.103
+variable drum_t equal 0.063
+
+variable material_kg equal 0.597
+
+
+#drum rotation in rpm
+variable rotSpeed equal -8.0
+variable periodOfRot equal 60.0/abs(${rotSpeed})
+
+variable resume_time equal ${periodOfRot}
+
+variable N_init equal 10000.0
+variable N_dump equal 10000
+variable N_thermo equal 1000
+variable N_check equal 1000
+variable numRot equal 1
+variable N_resume equal 10000 #1000.0
+variable N_resume_steps equal ${numRot}*${periodOfRot}/${dt}+${N_dump}
+
+
+##Material parameters##
+# particle density
+variable partDens equal 5672.978453970498
+# particle radius		
+variable rad equal 2.3e-06
+
+variable skin   equal   ${rad}*0.9
+           
+
+# Young's modulus 5e6
+variable ym equal 5000000.0
+# Poisson's ratio	
+variable pr equal 0.2
+
+
+##contact model parameters##
+# coefficient of resitution
+variable rest equal 0.1
+
+#particle-particle properties
+# coefficient of friction p-p
+variable muPP equal 0.4
+# coefficient of rolling friction p-p
+variable rfPP equal 0.6436055718450252
+variable rvdPP equal 0
+variable rsPP equal 2.0
+variable rbPP equal 0.41140953284460313
+# cohesion energy density P-P
+variable ced equal 137206.53675676216
+
+
+##particle-shell properties
+# coefficient of friction p-w
+variable muPW equal 0.5
+# coefficient of rolling friction p-w		
+variable rfPW equal 0.05
+variable rvdPW equal 0
+variable rsPW equal 1.0
+# cohesion energy density 1-2	1.0e5	
+variable cedW equal 50000.0
+
+
+
+##particle-cover properties
+# coefficient of friction p-w
+variable muPW2 equal 0.1
+# coefficient of rolling friction p-w	
+variable rfPW2 equal 0.05
+variable rvdPW2 equal 0
+variable rsPW2 equal 1.0
+# cohesion energy density 1-3		
+variable cedW2 equal 50000.0
+

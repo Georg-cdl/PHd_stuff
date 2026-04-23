@@ -1,0 +1,116 @@
+#########################################
+# drum filling
+#########################################
+
+include         data/parameter_global.txt
+
+include         data/function_contact_models.txt
+
+coarsegraining ${cgf} model_check warn
+
+atom_style      granular
+atom_modify     map array
+communicate     single vel yes
+
+boundary        f f f
+newton          off
+units           si
+
+
+
+variable drum_R equal ${drum_D}/2.0
+variable region_drum1a equal ${drum_R}+0.01
+variable region_drum1b equal -${drum_R}-0.01
+variable region_drum2a equal ${drum_t}+0.001
+variable region_drum2b equal -0.001
+
+
+
+
+
+region          reg block ${region_drum1b} ${region_drum1a} ${region_drum2b} ${region_drum2a} ${region_drum1b} ${region_drum1a} units box
+
+create_box	3 reg
+
+
+
+neighbor	${skin} bin
+neigh_modify	delay 0
+
+#load material parameteres
+
+include         data/function_set_parameter.txt
+
+
+
+
+#contact model
+pair_style gran model ${normal_model} ${tangential_model} ${cohesion_model} ${rolling_model} ${normal_model_option}
+pair_coeff	* *
+
+#timestep, gravity
+timestep    ${dt}
+fix         gravi all gravity 9.81 vector 0.0 0.0 -1.0
+
+
+#import mesh from cad and do fix
+fix	cad1 all mesh/surface file meshes/shell.stl type 2 scale 0.001 
+fix	cad2 all mesh/surface file meshes/cov1.stl type 3 scale 0.001 
+fix	cad3 all mesh/surface file meshes/cov2.stl type 3 scale 0.001 
+
+fix 	meshwalls all wall/gran model ${normal_model} ${tangential_model} ${cohesion_model} ${rolling_model} mesh n_meshes 3 meshes cad1 cad2 cad3 ${normal_model_option}
+
+#fix particle properties
+fix     pts1 all particletemplate/sphere 1 atom_type 1 density constant ${partDens} radius constant ${rad}
+fix     pdd1 all particledistribution/discrete 12345 1 pts1 1.0
+
+#insertion region
+region      cylReg cylinder y 0.0 0.0  ${drum_R} 0.000 ${drum_t} units box
+region      upHalfReg block ${region_drum1b} ${region_drum1a} ${region_drum2b} ${region_drum2a} 0.000  ${region_drum1a} units box
+
+fix ins all insert/pack seed 12345 distributiontemplate pdd1 insert_every 200 overlapcheck yes all_in yes vel uniform 0 0 -0.5 0.5 0.5 0.25 mass_in_region ${material_kg} region cylReg ntry_mc 10000
+
+
+#perform constant NVE integration to update position, velocity, and angular velocity
+fix		integr all nve/sphere
+
+#periodically check if the time step is larger than 20% Rayleigh and Hertz time
+fix ts_check all check/timestep/gran 100 0.2 0.1
+
+#screen output
+compute         rke all erotate/sphere
+thermo_style	custom step atoms ke vol time cpu cpuremain
+thermo		100
+thermo_modify	lost ignore norm no
+compute_modify	thermo_temp dynamic yes
+
+#insert the first particles so that dump is not empty
+
+#file output - dump output files every 0.1s
+dump   		dmp2 all custom/vtk 1000 /dev/shm/post/init-*.liggghts.vtk id type x y z vx vy vz fx fy fz radius
+dump_modify dmp2 pad 10
+#dump 	dumpstl all mesh/stl 1000 post/init-*.stl
+#dump_modify dumpstl pad 10
+
+
+variable m equal mass(all)
+fix extra1 all print 1000 " $m" file fill.log screen no title "%step totalmass"
+fix extra2 all print 1000 "mass: $m" 
+
+
+variable count1 equal count(all,cylReg)
+
+fix extra3 all print 1000 "count: ${count1}" 
+
+run     	${N_init}
+unfix ins
+#delete_atoms region upHalfReg
+
+print $m
+
+run     	1000
+
+
+write_restart  	post/restart/init.liggghts.restart
+print "initialization done"
+

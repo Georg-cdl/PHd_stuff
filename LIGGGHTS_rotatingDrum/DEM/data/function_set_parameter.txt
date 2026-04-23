@@ -1,0 +1,11 @@
+#Material properties required for pair style
+fix 		m1     all property/global youngsModulus                     peratomtype ${ym} ${ym} ${ym}
+fix 		m2     all property/global poissonsRatio                     peratomtype ${pr} ${pr} ${pr}
+fix 		m3     all property/global coefficientRestitution            peratomtypepair  3 ${rest} ${rest} ${rest}        ${rest} 0 0     ${rest}  0 0
+fix 		mFric1 all property/global coefficientFriction               peratomtypepair  3 ${muPP} ${muPW} ${muPW2}       ${muPW} 0 0     ${muPW2} 0 0
+
+fix 		mRoll1 all property/global coefficientRollingFriction 	peratomtypepair 3  ${rfPP}  ${rfPW}  ${rfPW2}    ${rfPW}  0 0    ${rfPW2}  0 0
+fix 		mRoll2 all property/global coefficientRollingStiffness	peratomtypepair 3  ${rsPP}  ${rsPW}  ${rsPW2}    ${rsPW}  0 0    ${rsPW2}  0 0
+fix     	mRoll3 all property/global  coefficientRollingBrittleness 	peratomtypepair 3  ${rbPP}  ${rbPP}  ${rbPP}     ${rbPP}  0 0    ${rbPP}   0 0
+
+fix 		mCoh1  all property/global cohesionEnergyDensity             peratomtypepair 3 ${ced}    ${cedW}  ${cedW2}    ${cedW} 0 0      ${cedW2}  0 0

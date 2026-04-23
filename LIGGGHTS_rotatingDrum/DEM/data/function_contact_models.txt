@@ -1,0 +1,5 @@
+variable rolling_model string 'rolling_friction epsd3'
+variable cohesion_model string 'cohesion sjkr'
+variable normal_model string 'hertz'
+variable tangential_model string 'tangential history'
+variable normal_model_option string 'limitForce on'
