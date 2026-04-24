@@ -1,0 +1,37 @@
+# =========================
+# LIGGGHTS / DEM outputs
+# =========================
+*.log
+*.dump
+*.vtk
+*.stl
+*.restart
+
+# DEM runtime logs
+LIGGGHTS_rotatingDrum/DEM/*.log
+
+# =========================
+# OpenFOAM runtime data
+# =========================
+OpenFOAM_*/processor*
+OpenFOAM_*/postProcessing/
+OpenFOAM_*/dynamicCode/
+
+# =========================
+# Temporary / output files
+# =========================
+*.jpg
+*.jpeg
+*.gif
+
+# =========================
+# Python cache
+# =========================
+__pycache__/
+*.pyc
+
+# =========================
+# OS junk
+# =========================
+.DS_Store
+Thumbs.db
