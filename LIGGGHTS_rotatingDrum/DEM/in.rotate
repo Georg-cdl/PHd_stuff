@@ -83,13 +83,15 @@ dump_modify dumpstl pad 10
 
 dump d_contact all custom ${N_resume} post/contact.dump id c_cnum
 
+dump d_roi roi_group custom ${N_resume} post/roi.dump id x y z
+
 
 #moving mesh
 fix move1 all move/mesh mesh cad1 rotate origin 0. 0. 0. axis  0. 1. 0. period ${periodOfRot}
 fix move2 all move/mesh mesh cad2 rotate origin 0. 0. 0. axis  0. 1. 0. period ${periodOfRot}
 fix move3 all move/mesh mesh cad3 rotate origin 0. 0. 0. axis  0. 1. 0. period ${periodOfRot}
 
-fix tracer all property/atom/tracer region_mark ROI mark_step 0 marker_style dirac check_mark_every 1
-dump d_tracer all custom ${N_resume} post/tracer.dump id type x y z f_tracer
+#fix tracer all property/atom/tracer region_mark ROI mark_step 0 marker_style dirac check_mark_every 1
+#dump d_tracer all custom ${N_resume} post/tracer.dump id type x y z f_tracer
 
 run ${N_resume_steps}
