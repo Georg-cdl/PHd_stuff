@@ -5,7 +5,10 @@ Created on Fri Mar 27 09:39:31 2020
 
 @author: tobias
 https://stackoverflow.com/questions/53406534/procedural-circle-mesh-with-uniform-faces
-conda install -c conda-forge numpy-stl 
+conda install -c conda-forge numpy-stl
+
+Adapted by: Georg
+Changed Mesh orientation to rotate around x-axis
 """
 from scipy.spatial import Delaunay
 
@@ -28,7 +31,7 @@ for i in range(N):
     
     for j in range(n+1):
         print(j)
-        vertices_shell.append([R*np.cos(i/N*np.pi*2), d*j, R*np.sin(i/N*np.pi*2)]) 
+        vertices_shell.append([d*j, R*np.cos(i/N*np.pi*2), R*np.sin(i/N*np.pi*2)]) 
    
     
     vertices_shell2.append([R*np.cos(i/N*np.pi*2), R*np.sin(i/N*np.pi*2)]) # 2*i
@@ -72,11 +75,15 @@ vertices_shell = np.array(vertices_shell)
 faces_shell = np.array(faces_shell)
   
 vertices_cov1 = np.array(B['vertices'])
-vertices_cov1 = np.array([np.array(vertices_cov1)[:,0],np.array(vertices_cov1)[:,0]*0,np.array(vertices_cov1)[:,1]]).transpose()
+vertices_cov1 = np.array([
+    np.zeros_like(vertices_cov1[:,0]),   # x = 0 plane
+    vertices_cov1[:,0],                  # y radial
+    vertices_cov1[:,1]                   # z radial
+]).transpose()
 
 faces_cov1 = np.array(B['triangles'])  
  
-vertices_cov2 = np.array(vertices_cov1)+[0, dges, 0]
+vertices_cov2 = vertices_cov1 + [dges, 0, 0]
 faces_cov2 = np.array(B['triangles'])  
 
 # # Create the mesh shell
@@ -103,7 +110,7 @@ for i, f in enumerate(faces_cov2):
 
 cov2.save('cov2.stl', mode=Mode.ASCII)
 
-points=np.array(vertices_cov1)[0::2,(0,2)]
+points = np.array(vertices_shell2)[:, 0:2]
 #points=np.array(vertices_shell2)
 tri = Delaunay(points)
 

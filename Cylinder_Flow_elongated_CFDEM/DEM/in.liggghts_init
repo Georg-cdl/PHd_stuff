@@ -1,0 +1,154 @@
+################################################################################
+# heattransfer in packed bed                        			       #
+#                                                                              #
+#                                                                              #
+# authors: Georg Scheurecke                                                    #
+# date: 04.2026                                                                #
+################################################################################
+#########################################
+# imports
+#########################################
+include         ../DEM/data/parameter_global.txt
+include         ../DEM/data/function_contact_models.txt
+
+#########################################
+# drum filling
+#########################################
+echo both
+coarsegraining ${cgf} model_check warn
+
+# define the attributes associated with the particles,
+atom_style      granular
+
+# use an array to map particle IDs to local storage index,
+atom_modify     map array
+
+# set simulation domain to be fixed in x y z
+boundary        f f f
+
+# save communication by turning off Newton's 3rd law for pairwise interaction,
+# note: this setting only influences communication between procs, Newton's
+# 3rd law is still used for contact force calculations
+newton          off
+
+# use a single value for ghost particle cutoff distance and
+# enable velocity to be communicated with ghost particles
+communicate     single vel yes
+
+# set unit system to SI
+units           si
+
+#########################################
+# Simulation Domain
+#########################################
+# Dimensions
+variable R equal ${drum_D}/2.0
+variable eps equal 0.001
+variable xlo equal -${eps}
+variable xhi equal ${drum_t}+${eps}
+variable ylo equal -${R}-${eps}
+variable yhi equal ${R}+${eps}
+variable zlo equal -${R}-${eps}
+variable zhi equal ${R}+${eps}
+
+# define the region used as simulation domain (min/max X, min/max Y, min/max Z)
+region          domain block ${xlo} ${xhi} ${ylo} ${yhi} ${zlo} ${zhi} units box
+
+# create the simulation domain and 3 material types (with friction/frictionless)
+create_box      3 domain
+
+# specify the skin distance for neighbor list generation
+neighbor        ${skin} bin
+neigh_modify    delay 0
+
+#########################################
+# particle properties
+#########################################
+# define the material properties required for granular pair styles
+include         ../DEM/data/function_set_parameter.txt
+
+# specify contact model to use
+pair_style  gran model ${normal_model} ${tangential_model} ${cohesion_model} ${rolling_model} ${normal_model_option}
+pair_coeff  * *
+
+# set the time step
+timestep    ${dt}
+
+# apply gravity
+fix gravity all gravity 9.81 vector 0.0 0.0 -1.0
+
+# import mesh from cad and do fix
+fix	cad1 all mesh/surface file meshes/shell.stl type 2 scale 0.001 
+fix	cad2 all mesh/surface file meshes/cov1.stl type 3 scale 0.001 
+fix	cad3 all mesh/surface file meshes/cov2.stl type 3 scale 0.001
+
+fix 	meshwalls all wall/gran model ${normal_model} ${tangential_model} ${cohesion_model} ${rolling_model} mesh n_meshes 3 meshes cad1 cad2 cad3 ${normal_model_option}
+
+# heat transfer
+fix         ftco all property/global thermalConductivity peratomtype 5. 5. 5.
+fix         ftca all property/global thermalCapacity peratomtype 1000. 1000. 1000.
+fix         heattransfer all heat/gran initial_temperature 263.
+
+# particle distributions and insertion
+fix     pts1 all particletemplate/sphere 1 atom_type 1 density constant ${partDens} radius constant ${rad}
+fix     pdd1 all particledistribution/discrete 12345 1 pts1 1.0
+
+#insertion region
+region cylReg cylinder x 0.0 0.0 ${R} ${xlo} ${xhi} units box
+
+fix ins all insert/pack seed 12345 distributiontemplate pdd1 insert_every 200 overlapcheck yes all_in yes vel uniform 0 0 -0.5 0.5 0.5 0.25 mass_in_region ${material_kg} region cylReg ntry_mc 10000
+
+# use constant NVE integration to update position, velocity and angular velocity
+fix integr all nve/sphere
+
+#########################################
+# Screen Output
+#########################################
+# output settings, include total thermal energy
+compute         rke all erotate/sphere
+
+# output settings, include kinetic energy
+thermo_style    custom step atoms ke c_rke f_heattransfer vol
+
+# set frequency of output
+thermo          1000
+
+# ignore particles leaving the simulation domain,
+# do not normalize thermodynamic output values by the number of atoms
+thermo_modify   lost ignore norm no
+compute_modify  thermo_temp dynamic yes
+
+# insert the first particles
+run             1
+
+#########################################
+# File Output
+#########################################
+dump            dmp2 all custom/vtk 1000 ../DEM/post/init-*.liggghts.vtk id type x y z vx vy vz fx fy fz omegax omegay omegaz radius f_heattransfer[0] f_heatFlux[0]
+dump_modify dmp2 pad 10
+
+variable count1 equal count(all,cylReg)
+fix extra3 all print 1000 "count: ${count1}"
+
+#########################################
+# Run Initialisation
+#########################################
+#First run N_init steps and insert particles
+run ${N_init}
+
+# stop particle insertion
+unfix ins
+
+# let settle for another number of timesteps
+run 50000
+
+# write the restart file
+write_restart   post/restart/liggghts.restart
+print "initialization done"
+print "===== SANITY CHECK ====="
+print "material_kg = ${material_kg}"
+print "rad = ${rad}"
+print "cgf = ${cgf}"
+print "particle density = ${partDens}"
+print "========================"
+

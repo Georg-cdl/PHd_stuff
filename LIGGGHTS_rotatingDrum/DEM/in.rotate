@@ -61,10 +61,10 @@ fix ts_check all check/timestep/gran ${N_resume} 0.2 0.2
 
 # --- ROI definition ---
 variable roi_R equal 0.25*${drum_D}
-variable zmin equal -0.5*${drum_t}
-variable zmax equal  0.5*${drum_t}
+variable xmin equal -0.5*${drum_t}
+variable xmax equal  0.5*${drum_t}
 
-region ROI cylinder y 0.0 0.0 ${roi_R} ${zmin} ${zmax} units box
+region ROI cylinder x 0.0 0.0 ${roi_R} ${xmin} ${xmax} units box
 group roi_group dynamic all region ROI every 1
 
 
@@ -87,9 +87,9 @@ dump d_roi roi_group custom ${N_resume} post/roi.dump id x y z
 
 
 #moving mesh
-fix move1 all move/mesh mesh cad1 rotate origin 0. 0. 0. axis  0. 1. 0. period ${periodOfRot}
-fix move2 all move/mesh mesh cad2 rotate origin 0. 0. 0. axis  0. 1. 0. period ${periodOfRot}
-fix move3 all move/mesh mesh cad3 rotate origin 0. 0. 0. axis  0. 1. 0. period ${periodOfRot}
+fix move1 all move/mesh mesh cad1 rotate origin 0. 0. 0. axis  1. 0. 0. period ${periodOfRot}
+fix move2 all move/mesh mesh cad2 rotate origin 0. 0. 0. axis  1. 0. 0. period ${periodOfRot}
+fix move3 all move/mesh mesh cad3 rotate origin 0. 0. 0. axis  1. 0. 0. period ${periodOfRot}
 
 #fix tracer all property/atom/tracer region_mark ROI mark_step 0 marker_style dirac check_mark_every 1
 #dump d_tracer all custom ${N_resume} post/tracer.dump id type x y z f_tracer

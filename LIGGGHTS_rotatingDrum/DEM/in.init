@@ -17,18 +17,22 @@ newton          off
 units           si
 
 
+#Dimensions
+variable R equal ${drum_D}/2.0
+variable eps equal 0.001
 
-variable drum_R equal ${drum_D}/2.0
-variable region_drum1a equal ${drum_R}+0.01
-variable region_drum1b equal -${drum_R}-0.01
-variable region_drum2a equal ${drum_t}+0.001
-variable region_drum2b equal -0.001
+variable xlo equal -${eps}
+variable xhi equal ${drum_t}+${eps}
+
+variable ylo equal -${R}-${eps}
+variable yhi equal ${R}+${eps}
+
+variable zlo equal -${R}-${eps}
+variable zhi equal ${R}+${eps}
 
 
 
-
-
-region          reg block ${region_drum1b} ${region_drum1a} ${region_drum2b} ${region_drum2a} ${region_drum1b} ${region_drum1a} units box
+region reg block ${xlo} ${xhi} ${ylo} ${yhi} ${zlo} ${zhi} units box
 
 create_box	3 reg
 
@@ -65,8 +69,8 @@ fix     pts1 all particletemplate/sphere 1 atom_type 1 density constant ${partDe
 fix     pdd1 all particledistribution/discrete 12345 1 pts1 1.0
 
 #insertion region
-region      cylReg cylinder y 0.0 0.0  ${drum_R} 0.000 ${drum_t} units box
-region      upHalfReg block ${region_drum1b} ${region_drum1a} ${region_drum2b} ${region_drum2a} 0.000  ${region_drum1a} units box
+region cylReg cylinder x ${xlo} 0.0 ${R} 0.000 ${drum_t} units box
+region upHalfReg block ${xlo} ${xhi} ${ylo} ${yhi} 0.0 ${zhi} units box
 
 fix ins all insert/pack seed 12345 distributiontemplate pdd1 insert_every 200 overlapcheck yes all_in yes vel uniform 0 0 -0.5 0.5 0.5 0.25 mass_in_region ${material_kg} region cylReg ntry_mc 10000
 

@@ -1,0 +1,583 @@
+LIGGGHTS (Version LIGGGHTS-PFM 24.01, compiled 2026-04-13-07:49:32 by cdldsks, git commit f25c15c99d72e2d9b1b9e0045bfd84885c3b9b83, based on LAMMPS 23 Nov 2013)
+################################################################################
+# heattransfer in packed bed                        			       #
+#                                                                              #
+#                                                                              #
+# authors: Georg Scheurecke                                                    #
+# date: 04.2026                                                                #
+################################################################################
+#########################################
+# imports
+#########################################
+include         ../DEM/data/parameter_global.txt
+###Simulation parameters###
+
+#coarse-graning factor needs to be adjusted to achieve the desired particle size
+variable cgf equal 300.0
+
+variable dt equal 1.0416666666666666e-05
+
+variable drum_D equal 0.103
+variable drum_t equal 0.063
+
+variable material_kg equal 0.597
+
+#drum rotation in rpm
+variable rotSpeed equal -8.0
+variable periodOfRot equal 60.0/abs(${rotSpeed})
+variable periodOfRot equal 60.0/abs(-8)
+
+variable resume_time equal ${periodOfRot}
+variable resume_time equal 7.5
+
+variable N_init equal 10000.0
+variable N_dump equal 10000
+variable N_thermo equal 1000
+variable N_check equal 1000
+variable numRot equal 1
+variable N_resume equal 1000
+variable N_resume_steps equal ${numRot}*${periodOfRot}/${dt}+${N_dump}
+variable N_resume_steps equal 1*${periodOfRot}/${dt}+${N_dump}
+variable N_resume_steps equal 1*7.5/${dt}+${N_dump}
+variable N_resume_steps equal 1*7.5/1.04166666666667e-05+${N_dump}
+variable N_resume_steps equal 1*7.5/1.04166666666667e-05+10000
+
+##Material parameters##
+# particle density
+variable partDens equal 5672.978453970498
+# particle radius
+variable rad equal 2.3e-06
+
+variable skin   equal   ${rad}*0.9
+variable skin   equal   2.3e-06*0.9
+
+
+# Young's modulus 5e6
+variable ym equal 5000000.0
+# Poisson's ratio
+variable pr equal 0.2
+
+
+##contact model parameters##
+# coefficient of resitution
+variable rest equal 0.1
+
+#particle-particle properties
+# coefficient of friction p-p
+variable muPP equal 0.4
+# coefficient of rolling friction p-p
+variable rfPP equal 0.6436055718450252
+variable rvdPP equal 0
+variable rsPP equal 2.0
+variable rbPP equal 0.41140953284460313
+# cohesion energy density P-P
+variable ced equal 137206.53675676216
+
+
+##particle-shell properties
+# coefficient of friction p-w
+variable muPW equal 0.5
+# coefficient of rolling friction p-w
+variable rfPW equal 0.05
+variable rvdPW equal 0
+variable rsPW equal 1.0
+# cohesion energy density 1-2	1.0e5
+variable cedW equal 50000.0
+
+
+
+##particle-cover properties
+# coefficient of friction p-w
+variable muPW2 equal 0.1
+# coefficient of rolling friction p-w
+variable rfPW2 equal 0.05
+variable rvdPW2 equal 0
+variable rsPW2 equal 1.0
+# cohesion energy density 1-3
+variable cedW2 equal 50000.0
+
+include         ../DEM/data/function_contact_models.txt
+variable rolling_model string 'rolling_friction epsd3'
+variable cohesion_model string 'cohesion sjkr'
+variable normal_model string 'hertz'
+variable tangential_model string 'tangential history'
+variable normal_model_option string 'limitForce on'
+
+#########################################
+# drum filling
+#########################################
+echo both
+coarsegraining ${cgf} model_check warn
+coarsegraining 300 model_check warn
+
+# define the attributes associated with the particles,
+atom_style      granular
+
+# use an array to map particle IDs to local storage index,
+atom_modify     map array
+
+# set simulation domain to be fixed in x y z
+boundary        f f f
+
+# save communication by turning off Newton's 3rd law for pairwise interaction,
+# note: this setting only influences communication between procs, Newton's
+# 3rd law is still used for contact force calculations
+newton          off
+
+# use a single value for ghost particle cutoff distance and
+# enable velocity to be communicated with ghost particles
+communicate     single vel yes
+
+# set unit system to SI
+units           si
+
+#########################################
+# Simulation Domain
+#########################################
+# Dimensions
+variable R equal ${drum_D}/2.0
+variable R equal 0.103/2.0
+variable eps equal 0.001
+variable xlo equal -${eps}
+variable xlo equal -0.001
+variable xhi equal ${drum_t}+${eps}
+variable xhi equal 0.063+${eps}
+variable xhi equal 0.063+0.001
+variable ylo equal -${R}-${eps}
+variable ylo equal -0.0515-${eps}
+variable ylo equal -0.0515-0.001
+variable yhi equal ${R}+${eps}
+variable yhi equal 0.0515+${eps}
+variable yhi equal 0.0515+0.001
+variable zlo equal -${R}-${eps}
+variable zlo equal -0.0515-${eps}
+variable zlo equal -0.0515-0.001
+variable zhi equal ${R}+${eps}
+variable zhi equal 0.0515+${eps}
+variable zhi equal 0.0515+0.001
+
+# define the region used as simulation domain (min/max X, min/max Y, min/max Z)
+region          domain block ${xlo} ${xhi} ${ylo} ${yhi} ${zlo} ${zhi} units box
+region          domain block -0.001 ${xhi} ${ylo} ${yhi} ${zlo} ${zhi} units box
+region          domain block -0.001 0.064 ${ylo} ${yhi} ${zlo} ${zhi} units box
+region          domain block -0.001 0.064 -0.0525 ${yhi} ${zlo} ${zhi} units box
+region          domain block -0.001 0.064 -0.0525 0.0525 ${zlo} ${zhi} units box
+region          domain block -0.001 0.064 -0.0525 0.0525 -0.0525 ${zhi} units box
+region          domain block -0.001 0.064 -0.0525 0.0525 -0.0525 0.0525 units box
+
+# create the simulation domain and 2 material types (with friction/frictionless)
+create_box      3 domain
+Created orthogonal box = (-0.001 -0.0525 -0.0525) to (0.064 0.0525 0.0525)
+  1 by 1 by 1 MPI processor grid
+
+# specify the skin distance for neighbor list generation
+neighbor        ${skin} bin
+neighbor        2.07e-06 bin
+neigh_modify    delay 0
+
+#########################################
+# particle properties
+#########################################
+# define the material properties required for granular pair styles
+include         ../DEM/data/function_set_parameter.txt
+
+#Material properties required for pair style
+fix 		m1     all property/global youngsModulus                     peratomtype ${ym} ${ym} ${ym}
+fix 		m1     all property/global youngsModulus                     peratomtype 5000000 ${ym} ${ym}
+fix 		m1     all property/global youngsModulus                     peratomtype 5000000 5000000 ${ym}
+fix 		m1     all property/global youngsModulus                     peratomtype 5000000 5000000 5000000
+fix 		m2     all property/global poissonsRatio                     peratomtype ${pr} ${pr} ${pr}
+fix 		m2     all property/global poissonsRatio                     peratomtype 0.2 ${pr} ${pr}
+fix 		m2     all property/global poissonsRatio                     peratomtype 0.2 0.2 ${pr}
+fix 		m2     all property/global poissonsRatio                     peratomtype 0.2 0.2 0.2
+fix 		m3     all property/global coefficientRestitution            peratomtypepair  3 ${rest} ${rest} ${rest}        ${rest} ${rest} ${rest}     ${rest} ${rest} ${rest}
+fix 		m3     all property/global coefficientRestitution            peratomtypepair  3 0.1 ${rest} ${rest}        ${rest} ${rest} ${rest}     ${rest} ${rest} ${rest}
+fix 		m3     all property/global coefficientRestitution            peratomtypepair  3 0.1 0.1 ${rest}        ${rest} ${rest} ${rest}     ${rest} ${rest} ${rest}
+fix 		m3     all property/global coefficientRestitution            peratomtypepair  3 0.1 0.1 0.1        ${rest} ${rest} ${rest}     ${rest} ${rest} ${rest}
+fix 		m3     all property/global coefficientRestitution            peratomtypepair  3 0.1 0.1 0.1        0.1 ${rest} ${rest}     ${rest} ${rest} ${rest}
+fix 		m3     all property/global coefficientRestitution            peratomtypepair  3 0.1 0.1 0.1        0.1 0.1 ${rest}     ${rest} ${rest} ${rest}
+fix 		m3     all property/global coefficientRestitution            peratomtypepair  3 0.1 0.1 0.1        0.1 0.1 0.1     ${rest} ${rest} ${rest}
+fix 		m3     all property/global coefficientRestitution            peratomtypepair  3 0.1 0.1 0.1        0.1 0.1 0.1     0.1 ${rest} ${rest}
+fix 		m3     all property/global coefficientRestitution            peratomtypepair  3 0.1 0.1 0.1        0.1 0.1 0.1     0.1 0.1 ${rest}
+fix 		m3     all property/global coefficientRestitution            peratomtypepair  3 0.1 0.1 0.1        0.1 0.1 0.1     0.1 0.1 0.1
+fix 		mFric1 all property/global coefficientFriction               peratomtypepair  3 ${muPP} ${muPW} ${muPW2}       ${muPW} 0 0     ${muPW2} 0 0
+fix 		mFric1 all property/global coefficientFriction               peratomtypepair  3 0.4 ${muPW} ${muPW2}       ${muPW} 0 0     ${muPW2} 0 0
+fix 		mFric1 all property/global coefficientFriction               peratomtypepair  3 0.4 0.5 ${muPW2}       ${muPW} 0 0     ${muPW2} 0 0
+fix 		mFric1 all property/global coefficientFriction               peratomtypepair  3 0.4 0.5 0.1       ${muPW} 0 0     ${muPW2} 0 0
+fix 		mFric1 all property/global coefficientFriction               peratomtypepair  3 0.4 0.5 0.1       0.5 0 0     ${muPW2} 0 0
+fix 		mFric1 all property/global coefficientFriction               peratomtypepair  3 0.4 0.5 0.1       0.5 0 0     0.1 0 0
+
+fix 		mRoll1 all property/global coefficientRollingFriction 	peratomtypepair 3  ${rfPP}  ${rfPW}  ${rfPW2}    ${rfPW}  ${rfPP} ${rfPW}    ${rfPW2}  ${rfPW} ${rfPP}
+fix 		mRoll1 all property/global coefficientRollingFriction 	peratomtypepair 3  0.643605571845025  ${rfPW}  ${rfPW2}    ${rfPW}  ${rfPP} ${rfPW}    ${rfPW2}  ${rfPW} ${rfPP}
+fix 		mRoll1 all property/global coefficientRollingFriction 	peratomtypepair 3  0.643605571845025  0.05  ${rfPW2}    ${rfPW}  ${rfPP} ${rfPW}    ${rfPW2}  ${rfPW} ${rfPP}
+fix 		mRoll1 all property/global coefficientRollingFriction 	peratomtypepair 3  0.643605571845025  0.05  0.05    ${rfPW}  ${rfPP} ${rfPW}    ${rfPW2}  ${rfPW} ${rfPP}
+fix 		mRoll1 all property/global coefficientRollingFriction 	peratomtypepair 3  0.643605571845025  0.05  0.05    0.05  ${rfPP} ${rfPW}    ${rfPW2}  ${rfPW} ${rfPP}
+fix 		mRoll1 all property/global coefficientRollingFriction 	peratomtypepair 3  0.643605571845025  0.05  0.05    0.05  0.643605571845025 ${rfPW}    ${rfPW2}  ${rfPW} ${rfPP}
+fix 		mRoll1 all property/global coefficientRollingFriction 	peratomtypepair 3  0.643605571845025  0.05  0.05    0.05  0.643605571845025 0.05    ${rfPW2}  ${rfPW} ${rfPP}
+fix 		mRoll1 all property/global coefficientRollingFriction 	peratomtypepair 3  0.643605571845025  0.05  0.05    0.05  0.643605571845025 0.05    0.05  ${rfPW} ${rfPP}
+fix 		mRoll1 all property/global coefficientRollingFriction 	peratomtypepair 3  0.643605571845025  0.05  0.05    0.05  0.643605571845025 0.05    0.05  0.05 ${rfPP}
+fix 		mRoll1 all property/global coefficientRollingFriction 	peratomtypepair 3  0.643605571845025  0.05  0.05    0.05  0.643605571845025 0.05    0.05  0.05 0.643605571845025
+fix 		mRoll2 all property/global coefficientRollingStiffness	peratomtypepair 3  ${rsPP}  ${rsPW}  ${rsPW2}    ${rsPW}  ${rsPP} ${rsPW}    ${rsPW2}  ${rsPW} ${rsPP}
+fix 		mRoll2 all property/global coefficientRollingStiffness	peratomtypepair 3  2  ${rsPW}  ${rsPW2}    ${rsPW}  ${rsPP} ${rsPW}    ${rsPW2}  ${rsPW} ${rsPP}
+fix 		mRoll2 all property/global coefficientRollingStiffness	peratomtypepair 3  2  1  ${rsPW2}    ${rsPW}  ${rsPP} ${rsPW}    ${rsPW2}  ${rsPW} ${rsPP}
+fix 		mRoll2 all property/global coefficientRollingStiffness	peratomtypepair 3  2  1  1    ${rsPW}  ${rsPP} ${rsPW}    ${rsPW2}  ${rsPW} ${rsPP}
+fix 		mRoll2 all property/global coefficientRollingStiffness	peratomtypepair 3  2  1  1    1  ${rsPP} ${rsPW}    ${rsPW2}  ${rsPW} ${rsPP}
+fix 		mRoll2 all property/global coefficientRollingStiffness	peratomtypepair 3  2  1  1    1  2 ${rsPW}    ${rsPW2}  ${rsPW} ${rsPP}
+fix 		mRoll2 all property/global coefficientRollingStiffness	peratomtypepair 3  2  1  1    1  2 1    ${rsPW2}  ${rsPW} ${rsPP}
+fix 		mRoll2 all property/global coefficientRollingStiffness	peratomtypepair 3  2  1  1    1  2 1    1  ${rsPW} ${rsPP}
+fix 		mRoll2 all property/global coefficientRollingStiffness	peratomtypepair 3  2  1  1    1  2 1    1  1 ${rsPP}
+fix 		mRoll2 all property/global coefficientRollingStiffness	peratomtypepair 3  2  1  1    1  2 1    1  1 2
+fix     	mRoll3 all property/global  coefficientRollingBrittleness 	peratomtypepair 3  ${rbPP}  ${rbPP}  ${rbPP}     ${rbPP}  0 0    ${rbPP}   0 0
+fix     	mRoll3 all property/global  coefficientRollingBrittleness 	peratomtypepair 3  0.411409532844603  ${rbPP}  ${rbPP}     ${rbPP}  0 0    ${rbPP}   0 0
+fix     	mRoll3 all property/global  coefficientRollingBrittleness 	peratomtypepair 3  0.411409532844603  0.411409532844603  ${rbPP}     ${rbPP}  0 0    ${rbPP}   0 0
+fix     	mRoll3 all property/global  coefficientRollingBrittleness 	peratomtypepair 3  0.411409532844603  0.411409532844603  0.411409532844603     ${rbPP}  0 0    ${rbPP}   0 0
+fix     	mRoll3 all property/global  coefficientRollingBrittleness 	peratomtypepair 3  0.411409532844603  0.411409532844603  0.411409532844603     0.411409532844603  0 0    ${rbPP}   0 0
+fix     	mRoll3 all property/global  coefficientRollingBrittleness 	peratomtypepair 3  0.411409532844603  0.411409532844603  0.411409532844603     0.411409532844603  0 0    0.411409532844603   0 0
+
+fix 		mCoh1  all property/global cohesionEnergyDensity             peratomtypepair 3 ${ced}    ${cedW}  ${cedW2}    ${cedW} ${ced} ${cedW}      ${cedW2}  ${cedW} ${ced}
+fix 		mCoh1  all property/global cohesionEnergyDensity             peratomtypepair 3 137206.536756762    ${cedW}  ${cedW2}    ${cedW} ${ced} ${cedW}      ${cedW2}  ${cedW} ${ced}
+fix 		mCoh1  all property/global cohesionEnergyDensity             peratomtypepair 3 137206.536756762    50000  ${cedW2}    ${cedW} ${ced} ${cedW}      ${cedW2}  ${cedW} ${ced}
+fix 		mCoh1  all property/global cohesionEnergyDensity             peratomtypepair 3 137206.536756762    50000  50000    ${cedW} ${ced} ${cedW}      ${cedW2}  ${cedW} ${ced}
+fix 		mCoh1  all property/global cohesionEnergyDensity             peratomtypepair 3 137206.536756762    50000  50000    50000 ${ced} ${cedW}      ${cedW2}  ${cedW} ${ced}
+fix 		mCoh1  all property/global cohesionEnergyDensity             peratomtypepair 3 137206.536756762    50000  50000    50000 137206.536756762 ${cedW}      ${cedW2}  ${cedW} ${ced}
+fix 		mCoh1  all property/global cohesionEnergyDensity             peratomtypepair 3 137206.536756762    50000  50000    50000 137206.536756762 50000      ${cedW2}  ${cedW} ${ced}
+fix 		mCoh1  all property/global cohesionEnergyDensity             peratomtypepair 3 137206.536756762    50000  50000    50000 137206.536756762 50000      50000  ${cedW} ${ced}
+fix 		mCoh1  all property/global cohesionEnergyDensity             peratomtypepair 3 137206.536756762    50000  50000    50000 137206.536756762 50000      50000  50000 ${ced}
+fix 		mCoh1  all property/global cohesionEnergyDensity             peratomtypepair 3 137206.536756762    50000  50000    50000 137206.536756762 50000      50000  50000 137206.536756762
+
+
+# specify contact model to use
+pair_style  gran model ${normal_model} ${tangential_model} ${cohesion_model} ${rolling_model} ${normal_model_option}
+pair_style  gran model hertz ${tangential_model} ${cohesion_model} ${rolling_model} ${normal_model_option}
+pair_style  gran model hertz tangential history ${cohesion_model} ${rolling_model} ${normal_model_option}
+pair_style  gran model hertz tangential history cohesion sjkr ${rolling_model} ${normal_model_option}
+pair_style  gran model hertz tangential history cohesion sjkr rolling_friction epsd3 ${normal_model_option}
+pair_style  gran model hertz tangential history cohesion sjkr rolling_friction epsd3 limitForce on
+pair_coeff  * *
+
+# set the time step
+timestep    ${dt}
+timestep    1.04166666666667e-05
+
+# apply gravity
+fix gravity all gravity 9.81 vector 0.0 0.0 -1.0
+
+# import mesh from cad and do fix
+fix	cad1 all mesh/surface file meshes/shell.stl type 2 scale 0.001
+fix	cad2 all mesh/surface file meshes/cov1.stl type 3 scale 0.001
+fix	cad3 all mesh/surface file meshes/cov2.stl type 3 scale 0.001
+
+fix 	meshwalls all wall/gran model ${normal_model} ${tangential_model} ${cohesion_model} ${rolling_model} mesh n_meshes 3 meshes cad1 cad2 cad3 ${normal_model_option}
+fix 	meshwalls all wall/gran model hertz ${tangential_model} ${cohesion_model} ${rolling_model} mesh n_meshes 3 meshes cad1 cad2 cad3 ${normal_model_option}
+fix 	meshwalls all wall/gran model hertz tangential history ${cohesion_model} ${rolling_model} mesh n_meshes 3 meshes cad1 cad2 cad3 ${normal_model_option}
+fix 	meshwalls all wall/gran model hertz tangential history cohesion sjkr ${rolling_model} mesh n_meshes 3 meshes cad1 cad2 cad3 ${normal_model_option}
+fix 	meshwalls all wall/gran model hertz tangential history cohesion sjkr rolling_friction epsd3 mesh n_meshes 3 meshes cad1 cad2 cad3 ${normal_model_option}
+fix 	meshwalls all wall/gran model hertz tangential history cohesion sjkr rolling_friction epsd3 mesh n_meshes 3 meshes cad1 cad2 cad3 limitForce on
+
+# heat transfer
+fix         ftco all property/global thermalConductivity peratomtype 5. 5. 5.
+fix         ftca all property/global thermalCapacity peratomtype 1000. 1000. 1000.
+fix         heattransfer all heat/gran initial_temperature 263.
+
+# particle distributions and insertion
+fix     pts1 all particletemplate/sphere 1 atom_type 1 density constant ${partDens} radius constant ${rad}
+fix     pts1 all particletemplate/sphere 1 atom_type 1 density constant 5672.9784539705 radius constant ${rad}
+fix     pts1 all particletemplate/sphere 1 atom_type 1 density constant 5672.9784539705 radius constant 2.3e-06
+fix     pdd1 all particledistribution/discrete 12345 1 pts1 1.0
+
+#insertion region
+region cylReg cylinder x 0.0 0.0 ${R} ${xlo} ${xhi} units box
+region cylReg cylinder x 0.0 0.0 0.0515 ${xlo} ${xhi} units box
+region cylReg cylinder x 0.0 0.0 0.0515 -0.001 ${xhi} units box
+region cylReg cylinder x 0.0 0.0 0.0515 -0.001 0.064 units box
+
+fix ins all insert/pack seed 12345 distributiontemplate pdd1 insert_every 200 overlapcheck yes all_in yes vel uniform 0 0 -0.5 0.5 0.5 0.25 mass_in_region ${material_kg} region cylReg ntry_mc 10000
+fix ins all insert/pack seed 12345 distributiontemplate pdd1 insert_every 200 overlapcheck yes all_in yes vel uniform 0 0 -0.5 0.5 0.5 0.25 mass_in_region 0.597 region cylReg ntry_mc 10000
+
+# use constant NVE integration to update position, velocity and angular velocity
+fix integr all nve/sphere
+
+#########################################
+# Screen Output
+#########################################
+# output settings, include total thermal energy
+compute         rke all erotate/sphere
+
+# output settings, include kinetic energy
+thermo_style    custom step atoms ke c_rke f_heattransfer vol
+
+# set frequency of output
+thermo          1000
+
+# ignore particles leaving the simulation domain,
+# do not normalize thermodynamic output values by the number of atoms
+thermo_modify   lost ignore norm no
+compute_modify  thermo_temp dynamic yes
+
+# insert the first particles
+run             1
+WARNING: The following model does not yield consistent results with coarse-graining: cohesion model sjkr (/home/cdldsks/CFDEM/LIGGGHTS/src/cohesion_model_sjkr.h:59)
+WARNING: The following model does not yield consistent results with coarse-graining: cohesion model sjkr (/home/cdldsks/CFDEM/LIGGGHTS/src/cohesion_model_sjkr.h:59)
+WARNING: The following model does not yield consistent results with coarse-graining: heat/gran (/home/cdldsks/CFDEM/LIGGGHTS/src/fix_heat_gran_conduction.cpp:202)
+INFO: Particle insertion ins: inserting every 200 steps
+Memory usage per processor = 16.8929 Mbytes
+Step Atoms KinEng rke heattran Volume 
+       0        0           -0            0            0  0.000716625 
+INFO: Particle insertion ins: inserted 76476 particle templates (mass 0.596997) at step 1
+ - a total of 76476 particle templates (mass 0.596997) inserted so far.
+       1    76476   0.13400295 5.9793991e-05    157010.22  0.000716625 
+Loop time of 0.150114 on 1 procs for 1 steps with 76476 atoms
+Max time of 0.150114 on 1 procs for 1 steps with 76476 atoms
+
+Pair  time (%) = 0.00242319 (1.61423)
+Max Pair time (ib) = 0.00242319 (0)
+Neigh time (%) = 0.0301395 (20.0777)
+Max Neigh time (ib) = 0.0301395 (0)
+Comm  time (%) = 0.000337296 (0.224693)
+Max Comm time (ib) = 0.000337296 (0)
+Outpt time (%) = 0.000520633 (0.346825)
+Max Outpt time (ib) = 0.000520633 (0)
+Other time (%) = 0.116694 (77.7365)
+Max Other time (ib) = 0.116694 (0)
+
+Nlocal:    76476 ave 76476 max 76476 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    153635 ave 153635 max 153635 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 153635
+Ave neighs/atom = 2.00893
+Neighbor list builds = 1
+Dangerous builds = 0
+
+#########################################
+# File Output
+#########################################
+dump            dmp2 all custom/vtk 1000 ../DEM/post/init-*.liggghts.vtk id type x y z vx vy vz fx fy fz omegax omegay omegaz radius f_heattransfer[0] f_heatFlux[0]
+dump_modify dmp2 pad 10
+
+variable count1 equal count(all,cylReg)
+fix extra3 all print 1000 "count: ${count1}"
+
+#########################################
+# Run Initialisation
+#########################################
+#First run N_init steps and insert particles
+run ${N_init}
+run 10000
+WARNING: The following model does not yield consistent results with coarse-graining: cohesion model sjkr (/home/cdldsks/CFDEM/LIGGGHTS/src/cohesion_model_sjkr.h:59)
+WARNING: The following model does not yield consistent results with coarse-graining: cohesion model sjkr (/home/cdldsks/CFDEM/LIGGGHTS/src/cohesion_model_sjkr.h:59)
+WARNING: The following model does not yield consistent results with coarse-graining: heat/gran (/home/cdldsks/CFDEM/LIGGGHTS/src/fix_heat_gran_conduction.cpp:202)
+Memory usage per processor = 56.6953 Mbytes
+Step Atoms KinEng rke heattran Volume 
+       1    76476   0.13400295 5.9793991e-05    157010.22  0.000716625 
+INFO: Particle insertion ins: inserted 1102 particle templates (mass 0.008603) at step 201
+ - a total of 77578 particle templates (mass 0.605600) inserted so far.
+INFO: Particle insertion ins: inserted 49 particle templates (mass 0.000383) at step 401
+ - a total of 77627 particle templates (mass 0.605982) inserted so far.
+INFO: Particle insertion ins: inserted 1 particle templates (mass 0.000008) at step 601
+ - a total of 77628 particle templates (mass 0.605990) inserted so far.
+count: 76476
+    1000    76476   0.10143021 0.0011846556    157010.22  0.000716625 
+INFO: Particle insertion ins: inserted 1 particle templates (mass 0.000008) at step 1201
+ - a total of 77629 particle templates (mass 0.605998) inserted so far.
+count: 76477
+    2000    76477   0.11172237 0.00042565581    157012.28  0.000716625 
+count: 76477
+    3000    76477   0.11409129 0.00028870211    157012.28  0.000716625 
+count: 76477
+    4000    76477   0.10123122 0.00026928145    157012.28  0.000716625 
+count: 76477
+    5000    76477  0.071553789 0.00026227897    157012.28  0.000716625 
+count: 76477
+    6000    76477   0.03158927 0.00024389286    157012.28  0.000716625 
+count: 76477
+    7000    76477 0.0046599099 0.00010835096    157012.28  0.000716625 
+count: 76477
+    8000    76477 0.00081770447 3.6985315e-05    157012.28  0.000716625 
+count: 76477
+    9000    76477 0.00021271685 1.0357827e-05    157012.28  0.000716625 
+count: 76477
+   10000    76477 3.5661367e-05  3.58327e-06    157012.28  0.000716625 
+   10001    76477 3.5718313e-05 3.5825812e-06    157012.28  0.000716625 
+Loop time of 182.694 on 1 procs for 10000 steps with 76477 atoms
+Max time of 182.694 on 1 procs for 10000 steps with 76477 atoms
+
+Pair  time (%) = 110.534 (60.5023)
+Max Pair time (ib) = 110.534 (0)
+Neigh time (%) = 19.3421 (10.5872)
+Max Neigh time (ib) = 19.3421 (0)
+Comm  time (%) = 0.287731 (0.157493)
+Max Comm time (ib) = 0.287731 (0)
+Outpt time (%) = 1.33735 (0.732017)
+Max Outpt time (ib) = 1.33735 (0)
+Other time (%) = 51.1929 (28.021)
+Max Other time (ib) = 51.1929 (0)
+
+Nlocal:    76477 ave 76477 max 76477 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    460013 ave 460013 max 460013 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 460013
+Ave neighs/atom = 6.01505
+Neighbor list builds = 565
+Dangerous builds = 0
+
+# stop particle insertion
+unfix ins
+
+# let settle for another number of timesteps
+run 50000
+WARNING: The following model does not yield consistent results with coarse-graining: cohesion model sjkr (/home/cdldsks/CFDEM/LIGGGHTS/src/cohesion_model_sjkr.h:59)
+WARNING: The following model does not yield consistent results with coarse-graining: cohesion model sjkr (/home/cdldsks/CFDEM/LIGGGHTS/src/cohesion_model_sjkr.h:59)
+WARNING: The following model does not yield consistent results with coarse-graining: heat/gran (/home/cdldsks/CFDEM/LIGGGHTS/src/fix_heat_gran_conduction.cpp:202)
+Memory usage per processor = 103.9 Mbytes
+Step Atoms KinEng rke heattran Volume 
+   10001    76477 3.5718313e-05 3.5825812e-06    157012.28  0.000716625 
+count: 76477
+   11000    76477 1.7329144e-05 1.6215232e-06    157012.28  0.000716625 
+count: 76477
+   12000    76477 1.8212625e-05 1.5602753e-06    157012.28  0.000716625 
+count: 76477
+   13000    76477 3.3559573e-06 5.9484768e-07    157012.28  0.000716625 
+count: 76477
+   14000    76477 2.8738278e-06 5.1888554e-07    157012.28  0.000716625 
+count: 76477
+   15000    76477 2.4659567e-06 5.884903e-07    157012.28  0.000716625 
+count: 76477
+   16000    76477 2.2178897e-06 6.6483315e-07    157012.28  0.000716625 
+count: 76477
+   17000    76477 2.1380286e-06 7.5887792e-07    157012.28  0.000716625 
+count: 76477
+   18000    76477 2.2262275e-06 8.6470758e-07    157012.28  0.000716625 
+count: 76477
+   19000    76477 2.3514326e-06 1.0491856e-06    157012.28  0.000716625 
+count: 76477
+   20000    76477 2.6788109e-06 1.1826671e-06    157012.28  0.000716625 
+count: 76477
+   21000    76477 7.0701311e-07 2.2951687e-07    157012.28  0.000716625 
+count: 76477
+   22000    76477 6.0725335e-07 2.1904569e-07    157012.28  0.000716625 
+count: 76477
+   23000    76477 6.9513977e-07 2.7298713e-07    157012.28  0.000716625 
+count: 76477
+   24000    76477 8.3208312e-07 3.3308344e-07    157012.28  0.000716625 
+count: 76477
+   25000    76477 1.0115086e-06 4.102985e-07    157012.28  0.000716625 
+count: 76477
+   26000    76477 1.2373127e-06 5.0296242e-07    157012.28  0.000716625 
+count: 76477
+   27000    76477 1.4857351e-06 6.0565451e-07    157012.28  0.000716625 
+count: 76477
+   28000    76477 1.8143432e-06 7.2325071e-07    157012.28  0.000716625 
+count: 76477
+   29000    76477 2.215421e-06 8.3297479e-07    157012.28  0.000716625 
+count: 76477
+   30000    76477 2.5407741e-06 1.0206963e-06    157012.28  0.000716625 
+count: 76477
+   31000    76477 2.4540173e-07 1.0140148e-07    157012.28  0.000716625 
+count: 76477
+   32000    76477 2.062772e-08 1.1381729e-11    157012.28  0.000716625 
+count: 76477
+   33000    76477 1.8650447e-08 8.3611484e-12    157012.28  0.000716625 
+count: 76477
+   34000    76477 1.5761003e-08 6.9798395e-12    157012.28  0.000716625 
+count: 76477
+   35000    76477 1.2326485e-08 5.4453754e-12    157012.28  0.000716625 
+count: 76477
+   36000    76477 8.8520649e-09 3.9191881e-12    157012.28  0.000716625 
+count: 76477
+   37000    76477 5.7575145e-09 2.5571758e-12    157012.28  0.000716625 
+count: 76477
+   38000    76477 3.2966164e-09 1.4575498e-12    157012.28  0.000716625 
+count: 76477
+   39000    76477 1.5736554e-09 6.9832031e-13    157012.28  0.000716625 
+count: 76477
+   40000    76477 5.4800847e-10 2.4152965e-13    157012.28  0.000716625 
+count: 76477
+   41000    76477 9.6309154e-11 3.9506586e-14    157012.28  0.000716625 
+count: 76477
+   42000    76477 4.9666934e-11 2.1558412e-14    157012.28  0.000716625 
+count: 76477
+   43000    76477 2.3310169e-10 1.010718e-13    157012.28  0.000716625 
+count: 76477
+   44000    76477 4.9657841e-10 2.1857219e-13    157012.28  0.000716625 
+count: 76477
+   45000    76477 7.3242544e-10 3.2264935e-13    157012.28  0.000716625 
+count: 76477
+   46000    76477 8.7813725e-10 3.8783889e-13    157012.28  0.000716625 
+count: 76477
+   47000    76477 9.1299451e-10 4.0366307e-13    157012.28  0.000716625 
+count: 76477
+   48000    76477 8.4794239e-10 3.7415537e-13    157012.28  0.000716625 
+count: 76477
+   49000    76477 7.1241192e-10 3.1444461e-13    157012.28  0.000716625 
+count: 76477
+   50000    76477 5.4221208e-10 2.3913558e-13    157012.28  0.000716625 
+count: 76477
+   51000    76477 3.7067368e-10 1.6303276e-13    157012.28  0.000716625 
+count: 76477
+   52000    76477 2.2251469e-10 9.7790161e-14    157012.28  0.000716625 
+count: 76477
+   53000    76477 1.1155263e-10 4.8888461e-14    157012.28  0.000716625 
+count: 76477
+   54000    76477 4.1339279e-11  1.79521e-14    157012.28  0.000716625 
+count: 76477
+   55000    76477 7.5089508e-12 3.1901631e-15    157012.28  0.000716625 
+count: 76477
+   56000    76477 9.0585176e-13 4.6966083e-16    157012.28  0.000716625 
+count: 76477
+   57000    76477 1.0771603e-11 4.7455357e-15    157012.28  0.000716625 
+count: 76477
+   58000    76477 2.7212866e-11 1.2005952e-14    157012.28  0.000716625 
+count: 76477
+   59000    76477 4.2714709e-11 1.8810994e-14    157012.28  0.000716625 
+count: 76477
+   60000    76477 5.2771921e-11 2.3235959e-14    157012.28  0.000716625 
+   60001    76477 5.3015249e-11 2.3343169e-14    157012.28  0.000716625 
+Loop time of 825.972 on 1 procs for 50000 steps with 76477 atoms
+Max time of 825.972 on 1 procs for 50000 steps with 76477 atoms
+
+Pair  time (%) = 553.024 (66.9543)
+Max Pair time (ib) = 553.024 (0)
+Neigh time (%) = 17.4242 (2.10954)
+Max Neigh time (ib) = 17.4242 (0)
+Comm  time (%) = 0.260013 (0.0314797)
+Max Comm time (ib) = 0.260013 (0)
+Outpt time (%) = 6.50864 (0.787998)
+Max Outpt time (ib) = 6.50864 (0)
+Other time (%) = 248.755 (30.1166)
+Max Other time (ib) = 248.755 (0)
+
+Nlocal:    76477 ave 76477 max 76477 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    459882 ave 459882 max 459882 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 459882
+Ave neighs/atom = 6.01334
+Neighbor list builds = 428
+Dangerous builds = 0
+
+# write the restart file
+write_restart   post/restart/liggghts.restart
+WARNING: The following model does not yield consistent results with coarse-graining: cohesion model sjkr (/home/cdldsks/CFDEM/LIGGGHTS/src/cohesion_model_sjkr.h:59)
+WARNING: The following model does not yield consistent results with coarse-graining: cohesion model sjkr (/home/cdldsks/CFDEM/LIGGGHTS/src/cohesion_model_sjkr.h:59)
+WARNING: The following model does not yield consistent results with coarse-graining: heat/gran (/home/cdldsks/CFDEM/LIGGGHTS/src/fix_heat_gran_conduction.cpp:202)
+print "===== SANITY CHECK ====="
+===== SANITY CHECK =====
+print "material_kg = ${material_kg}"
+material_kg = 0.597
+print "rad = ${rad}"
+rad = 2.3e-06
+print "cgf = ${cgf}"
+cgf = 300
+print "effective diameter = $(2*${rad}*${cgf})"
+ERROR: Invalid syntax in variable formula (/home/cdldsks/CFDEM/LIGGGHTS/src/variable.cpp:1628)
