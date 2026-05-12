@@ -4,7 +4,6 @@
 *.log
 *.dump
 *.vtk
-*.stl
 *.restart
 
 # DEM runtime logs
